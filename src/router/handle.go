@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,10 +11,46 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/nvnamsss/goinf/pipeline"
 )
 
 func download(w http.ResponseWriter, req *http.Request) {
-	reader, _ := ReadImage("AdobeStock_53119595.jpeg")
+	p := pipeline.NewPipeline()
+	stage := pipeline.NewStage(func() (str struct {
+		Filename string
+	}, e error) {
+		query := req.URL.Query()
+		filenames, ok := query["filename"]
+
+		if !ok {
+			return str, errors.New("filename param is missing")
+		}
+
+		str.Filename = filenames[0]
+
+		return
+	})
+	p.First = stage
+	e := p.Run()
+
+	if e != nil {
+		var res Response = Response{}
+		res.Error(e)
+		WriteJson(w, res)
+		return
+	}
+
+	filename := p.GetStringFirstOrDefault("Filename")
+
+	reader, e := ReadImage(filename)
+
+	if e != nil {
+		var res Response = Response{}
+		res.Error(e)
+		WriteJson(w, res)
+		return
+	}
+
 	w.Header().Set("Content-Disposition", "attachment; filename=image.png")
 	w.Header().Set("Content-Type", req.Header.Get("Content-Type"))
 	w.Header().Set("Content-Length", req.Header.Get("Content-Length"))
@@ -22,6 +59,8 @@ func download(w http.ResponseWriter, req *http.Request) {
 }
 
 func upload(w http.ResponseWriter, req *http.Request) {
+	var res Response = Response{Status: true}
+
 	req.ParseMultipartForm(32 << 20) // limit your max input length!
 	var buf bytes.Buffer
 	file, header, err := req.FormFile("file")
@@ -37,6 +76,8 @@ func upload(w http.ResponseWriter, req *http.Request) {
 	ioutil.WriteFile("backup.sql", buf.Bytes(), 0777)
 	fmt.Println(contents)
 	buf.Reset()
+
+	WriteJson(w, res)
 }
 
 func delete(w http.ResponseWriter, req *http.Request) {
