@@ -3,12 +3,11 @@ package router
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
+	"strconv"
+	"streetlity-cdn/sdrive"
 
 	"github.com/gorilla/mux"
 	"github.com/nvnamsss/goinf/pipeline"
@@ -20,10 +19,10 @@ func download(w http.ResponseWriter, req *http.Request) {
 		Filename string
 	}, e error) {
 		query := req.URL.Query()
-		filenames, ok := query["filename"]
+		filenames, ok := query["f"]
 
 		if !ok {
-			return str, errors.New("filename param is missing")
+			return str, errors.New("f param is missing")
 		}
 
 		str.Filename = filenames[0]
@@ -59,8 +58,51 @@ func download(w http.ResponseWriter, req *http.Request) {
 }
 
 func upload(w http.ResponseWriter, req *http.Request) {
-	var res Response = Response{Status: true}
+	var res struct {
+		Response
+		Paths map[string]string
+	}
+	res.Status = true
 
+	req.ParseForm()
+	p := pipeline.NewPipeline()
+	stage := pipeline.NewStage(func() (str struct {
+		Filename   []string
+		UploadType int
+	}, e error) {
+		form := req.PostForm
+
+		filenames, ok := form["filename"]
+		if !ok {
+			return str, errors.New("filename param is missing")
+		}
+
+		t, ok := form["utype"]
+
+		if ok {
+			if v, e := strconv.Atoi(t[0]); e == nil {
+				str.UploadType = v
+			}
+		}
+
+		str.Filename = filenames
+		return
+	})
+	p.First = stage
+	res.Error(p.Run())
+
+	if res.Status {
+		WriteJson(w, res)
+		return
+	}
+
+	filenames := p.GetString("Filename")
+	utype := p.GetIntFirstOrDefault("UploadType")
+
+	filemap, e := sdrive.UploadFiles(filenames, int(utype))
+	res.Error(e)
+
+	res.Paths = filemap
 	req.ParseMultipartForm(32 << 20) // limit your max input length!
 	var buf bytes.Buffer
 	file, header, err := req.FormFile("file")
@@ -68,20 +110,45 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}
 	defer file.Close()
-	name := strings.Split(header.Filename, ".")
-	fmt.Printf("File name %s\n", name[0])
-	io.Copy(&buf, file)
 
-	contents := buf.String()
-	ioutil.WriteFile("backup.sql", buf.Bytes(), 0777)
-	fmt.Println(contents)
+	io.Copy(&buf, file)
+	log.Println(header.Filename)
+	// ioutil.WriteFile(value, buf.Bytes(), 0777)
 	buf.Reset()
+	// for key, value := range filemap {
+
+	// }
 
 	WriteJson(w, res)
 }
 
 func delete(w http.ResponseWriter, req *http.Request) {
+	var res Response = Response{Status: true}
 
+	req.ParseForm()
+	p := pipeline.NewPipeline()
+	stage := pipeline.NewStage(func() (str struct {
+		Filename []string
+	}, e error) {
+		form := req.PostForm
+
+		files, ok := form["f"]
+		if !ok {
+			return str, errors.New("f param is missing")
+		}
+
+		str.Filename = files
+
+		return
+	})
+	p.First = stage
+	res.Error(p.Run())
+
+	if res.Status {
+
+	}
+
+	WriteJson(w, res)
 }
 
 func Handle(router *mux.Router) {
