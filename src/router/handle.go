@@ -137,6 +137,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 func delete(w http.ResponseWriter, req *http.Request) {
 	var res Response = Response{Status: true}
 
+	req.URL.RawQuery, _ = url.QueryUnescape(req.URL.RawQuery)
 	p := pipeline.NewPipeline()
 	stage := pipeline.NewStage(func() (str struct {
 		Filename []string
