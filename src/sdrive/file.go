@@ -1,11 +1,17 @@
 package sdrive
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"streetlity-cdn/config"
 	"strings"
+	"time"
 )
 
 type UploadType int
@@ -17,7 +23,14 @@ const (
 )
 
 func UploadFile(path string, data []byte, utype UploadType) (p string, e error) {
-	p = path
+	reg := regexp.MustCompile("^[\\w\\-. ]+$")
+
+	if !reg.MatchString(path) {
+		log.Println("[SDrive]", "invalid filename", path)
+		return p, errors.New("Invalid filename")
+	}
+
+	p = filepath.Join(GetPath(), path)
 	_, e = os.Stat(p)
 	count := 1
 	dir := filepath.Dir(p)
@@ -48,4 +61,13 @@ func DeleteFiles(path []string) (e error) {
 	}
 
 	return
+}
+
+//Generate path for storaging
+func GetPath() string {
+	now := time.Now()
+	d := now.Format("2006-01-02")
+	t := strconv.FormatInt(int64(now.Hour()), 10)
+
+	return filepath.Join(config.Config.Location, d, t)
 }

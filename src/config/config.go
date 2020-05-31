@@ -10,7 +10,7 @@ import (
 )
 
 type Configuration struct {
-	ResourcesLocation string `json:"resources-location"`
+	Location string `json:"location"`
 }
 
 var Config Configuration

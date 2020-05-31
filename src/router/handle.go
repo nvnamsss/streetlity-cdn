@@ -116,9 +116,13 @@ func upload(w http.ResponseWriter, req *http.Request) {
 
 		var buf bytes.Buffer
 		io.Copy(&buf, file)
-		p, _ := sdrive.UploadFile(f, buf.Bytes(), sdrive.UploadType(utype))
+		p, e := sdrive.UploadFile(f, buf.Bytes(), sdrive.UploadType(utype))
+		if e != nil {
+			res.Paths[f] = e.Error()
+		} else {
+			res.Paths[f] = p
+		}
 
-		res.Paths[f] = p
 		buf.Reset()
 	}
 
