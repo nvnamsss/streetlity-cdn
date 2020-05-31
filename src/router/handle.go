@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"streetlity-cdn/sdrive"
 
@@ -50,7 +51,7 @@ func download(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Disposition", "attachment; filename=image.png")
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(filename))
 	w.Header().Set("Content-Type", req.Header.Get("Content-Type"))
 	w.Header().Set("Content-Length", req.Header.Get("Content-Length"))
 
@@ -63,6 +64,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		Paths map[string]string
 	}
 	res.Status = true
+	res.Paths = make(map[string]string)
 
 	req.ParseForm()
 	p := pipeline.NewPipeline()
@@ -70,14 +72,14 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		Filename   []string
 		UploadType int
 	}, e error) {
-		form := req.PostForm
+		query := req.URL.Query()
+		files, ok := query["f"]
 
-		filenames, ok := form["filename"]
 		if !ok {
-			return str, errors.New("filename param is missing")
+			return str, errors.New("f param is missing")
 		}
 
-		t, ok := form["utype"]
+		t, ok := query["utype"]
 
 		if ok {
 			if v, e := strconv.Atoi(t[0]); e == nil {
@@ -85,13 +87,13 @@ func upload(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		str.Filename = filenames
+		str.Filename = files
 		return
 	})
 	p.First = stage
 	res.Error(p.Run())
 
-	if res.Status {
+	if !res.Status {
 		WriteJson(w, res)
 		return
 	}
@@ -99,25 +101,26 @@ func upload(w http.ResponseWriter, req *http.Request) {
 	filenames := p.GetString("Filename")
 	utype := p.GetIntFirstOrDefault("UploadType")
 
-	filemap, e := sdrive.UploadFiles(filenames, int(utype))
-	res.Error(e)
-
-	res.Paths = filemap
+	log.Println(filenames)
+	// res.Paths = filemap
 	req.ParseMultipartForm(32 << 20) // limit your max input length!
-	var buf bytes.Buffer
-	file, header, err := req.FormFile("file")
-	if err != nil {
-		panic(err)
+
+	for _, f := range filenames {
+		file, _, e := req.FormFile(f)
+		if e != nil {
+			res.Paths[f] = "cannot find this file in form"
+			continue
+		}
+
+		defer file.Close()
+
+		var buf bytes.Buffer
+		io.Copy(&buf, file)
+		p, _ := sdrive.UploadFile(f, buf.Bytes(), sdrive.UploadType(utype))
+
+		res.Paths[f] = p
+		buf.Reset()
 	}
-	defer file.Close()
-
-	io.Copy(&buf, file)
-	log.Println(header.Filename)
-	// ioutil.WriteFile(value, buf.Bytes(), 0777)
-	buf.Reset()
-	// for key, value := range filemap {
-
-	// }
 
 	WriteJson(w, res)
 }
@@ -125,14 +128,13 @@ func upload(w http.ResponseWriter, req *http.Request) {
 func delete(w http.ResponseWriter, req *http.Request) {
 	var res Response = Response{Status: true}
 
-	req.ParseForm()
 	p := pipeline.NewPipeline()
 	stage := pipeline.NewStage(func() (str struct {
 		Filename []string
 	}, e error) {
-		form := req.PostForm
+		query := req.URL.Query()
 
-		files, ok := form["f"]
+		files, ok := query["f"]
 		if !ok {
 			return str, errors.New("f param is missing")
 		}
@@ -145,7 +147,8 @@ func delete(w http.ResponseWriter, req *http.Request) {
 	res.Error(p.Run())
 
 	if res.Status {
-
+		filenames := p.GetString("Filename")
+		sdrive.DeleteFiles(filenames)
 	}
 
 	WriteJson(w, res)
