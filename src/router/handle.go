@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"streetlity-cdn/sdrive"
@@ -15,11 +16,13 @@ import (
 )
 
 func download(w http.ResponseWriter, req *http.Request) {
+	req.URL.RawQuery, _ = url.QueryUnescape(req.URL.RawQuery)
 	p := pipeline.NewPipeline()
 	stage := pipeline.NewStage(func() (str struct {
 		Filename string
 	}, e error) {
 		query := req.URL.Query()
+
 		filenames, ok := query["f"]
 
 		if !ok {
@@ -30,6 +33,7 @@ func download(w http.ResponseWriter, req *http.Request) {
 
 		return
 	})
+
 	p.First = stage
 	e := p.Run()
 
@@ -42,7 +46,7 @@ func download(w http.ResponseWriter, req *http.Request) {
 
 	filename := p.GetStringFirstOrDefault("Filename")
 
-	reader, e := ReadImage(filename)
+	reader, e := sdrive.DownloadFile(filename)
 
 	if e != nil {
 		var res Response = Response{}
@@ -84,6 +88,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		if ok {
 			if v, e := strconv.Atoi(t[0]); e == nil {
 				str.UploadType = v
+				log.Println(v)
 			}
 		}
 
