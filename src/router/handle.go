@@ -65,10 +65,10 @@ func download(w http.ResponseWriter, req *http.Request) {
 func upload(w http.ResponseWriter, req *http.Request) {
 	var res struct {
 		Response
-		Paths map[string]string
+		Paths map[string]Response
 	}
 	res.Status = true
-	res.Paths = make(map[string]string)
+	res.Paths = make(map[string]Response)
 
 	req.ParseForm()
 	p := pipeline.NewPipeline()
@@ -113,7 +113,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 	for _, f := range filenames {
 		file, _, e := req.FormFile(f)
 		if e != nil {
-			res.Paths[f] = "cannot find this file in form"
+			res.Paths[f] = Response{Status: false, Message: "cannot find this file in the form"}
 			continue
 		}
 
@@ -123,9 +123,9 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		io.Copy(&buf, file)
 		p, e := sdrive.UploadFile(f, buf.Bytes(), sdrive.UploadType(utype))
 		if e != nil {
-			res.Paths[f] = e.Error()
+			res.Paths[f] = Response{Status: false, Message: e.Error()}
 		} else {
-			res.Paths[f] = p
+			res.Paths[f] = Response{Status: true, Message: p}
 		}
 
 		buf.Reset()
