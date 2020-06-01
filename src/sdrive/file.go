@@ -66,6 +66,7 @@ func UploadFile(path string, data []byte, utype UploadType) (p string, e error) 
 	e = ioutil.WriteFile(filepath.Join(dir, p), data, 0777)
 
 	p = filepath.Join(prefix, p)
+	p = strings.ReplaceAll(p, "\\", "/")
 	return
 }
 
