@@ -25,7 +25,6 @@ const (
 
 func UploadFile(path string, data []byte, utype UploadType) (p string, e error) {
 	reg := regexp.MustCompile("^[\\w\\-. ]+$")
-	log.Println(utype == None)
 	if !reg.MatchString(path) {
 		log.Println("[SDrive]", "invalid filename", path)
 		return p, errors.New("Invalid filename")
@@ -64,7 +63,6 @@ func UploadFile(path string, data []byte, utype UploadType) (p string, e error) 
 		}
 	}
 	e = ioutil.WriteFile(filepath.Join(dir, p), data, 0777)
-
 	p = filepath.Join(prefix, p)
 	p = strings.ReplaceAll(p, "\\", "/")
 	return
@@ -88,7 +86,6 @@ func DeleteFiles(path []string) (e error) {
 
 func DownloadFile(path string) (reader io.Reader, e error) {
 	path = filepath.Join(config.Config.Location, path)
-
 	reader, e = os.Open(path)
 
 	return
@@ -101,5 +98,10 @@ func GetPrefixDirectory() (prefix string) {
 	t := strconv.FormatInt(int64(now.Hour()), 10)
 
 	prefix = filepath.Join(d, t)
+	return
+}
+
+func GetPath(file string) (path string) {
+	path = filepath.Join(config.Config.Location, file)
 	return
 }

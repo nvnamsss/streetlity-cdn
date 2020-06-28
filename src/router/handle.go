@@ -68,6 +68,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 		Paths map[string]Response
 	}
 	res.Status = true
+	res.Message = "Upload successfully"
 	res.Paths = make(map[string]Response)
 
 	req.ParseForm()
@@ -113,6 +114,7 @@ func upload(w http.ResponseWriter, req *http.Request) {
 	for _, f := range filenames {
 		file, _, e := req.FormFile(f)
 		if e != nil {
+			log.Println("[Upload]", "cannot find", f, "in the form")
 			res.Paths[f] = Response{Status: false, Message: "cannot find this file in the form"}
 			continue
 		}
@@ -164,9 +166,65 @@ func delete(w http.ResponseWriter, req *http.Request) {
 	WriteJson(w, res)
 }
 
+func modify(w http.ResponseWriter, req *http.Request) {
+	var res Response = Response{Status: true}
+	p := pipeline.NewPipeline()
+	stage := pipeline.NewStage(func() (str struct {
+		Filename   []string
+		UploadType int
+	}, e error) {
+		query := req.URL.Query()
+		files, ok := query["f"]
+
+		if !ok {
+			return str, errors.New("f param is missing")
+		}
+
+		t, ok := query["utype"]
+
+		if ok {
+			if v, e := strconv.Atoi(t[0]); e == nil {
+				str.UploadType = v
+				log.Println(v)
+			}
+		}
+
+		str.Filename = files
+		return
+	})
+	p.First = stage
+	res.Error(p.Run())
+	if !res.Status {
+		WriteJson(w, res)
+		return
+	}
+
+	filenames := p.GetString("Filename")
+	for _, f := range filenames {
+		file, _, e := req.FormFile(f)
+		if e != nil {
+			log.Println("[Upload]", "cannot find", f, "in the form")
+			continue
+		}
+
+		defer file.Close()
+
+		var buf bytes.Buffer
+		io.Copy(&buf, file)
+		if e := sdrive.Modify(f, buf.Bytes()); e != nil {
+			res.Error(e)
+		}
+		// p, e := sdrive.UploadFile(f, buf.Bytes(), sdrive.UploadType(utype))
+
+		buf.Reset()
+	}
+	WriteJson(w, res)
+}
+
 func Handle(router *mux.Router) {
 	log.Println("[Router]", "init handle")
 	router.HandleFunc("/", download).Methods("GET")
 	router.HandleFunc("/", upload).Methods("POST")
 	router.HandleFunc("/", delete).Methods("DELETE")
+	router.HandleFunc("/modify", modify).Methods("POST")
 }
