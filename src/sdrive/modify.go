@@ -7,7 +7,7 @@ import (
 	"regexp"
 )
 
-func Modify(path string, data []byte) (e error) {
+func Modify(path string, data []byte, createNew bool) (e error) {
 	reg := regexp.MustCompile("^(.+)\\/([^/]+)$")
 	if !reg.MatchString(path) {
 		log.Println("[SDrive]", "modify", "invalid filename", path)
@@ -17,8 +17,15 @@ func Modify(path string, data []byte) (e error) {
 	log.Println("[SDrive]", "modify", "data", string(data))
 	path = GetPath(path)
 	if _, e = os.Stat(path); os.IsNotExist(e) {
-		log.Println("[SDrive]", "modify", "path was not exist", path)
-		return
+		if createNew {
+			if _, e := os.Create(path); e != nil {
+				log.Println("[SDrive]", "m")
+			}
+
+		} else {
+			log.Println("[SDrive]", "modify", "path was not exist", path)
+			return
+		}
 	}
 
 	f, e := os.OpenFile(path, os.O_WRONLY, os.ModeAppend)

@@ -220,7 +220,7 @@ func Modify(w http.ResponseWriter, req *http.Request) {
 
 	for _, f := range filenames {
 		data := []byte(datas[f])
-		if e := sdrive.Modify(f, data); e != nil {
+		if e := sdrive.Modify(f, data, false); e != nil {
 			res.Error(e)
 		}
 	}
